@@ -1,103 +1,450 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, DollarSign, Calendar, TrendingUp, Bell, AlertTriangle, Grid3X3, BarChart3, CalendarDays, Search, Filter, Download } from "lucide-react";
+import { SubscriptionCard } from "@/components/subscription-card";
+import { SubscriptionForm } from "@/components/subscription-form";
+import { Analytics } from "@/components/analytics";
+import { CalendarView } from "@/components/calendar-view";
+import { Subscription, SubscriptionFormData } from "@/types/subscription";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  // Load subscriptions from localStorage on component mount
+  useEffect(() => {
+    const savedSubscriptions = localStorage.getItem('subscriptionTracker');
+    if (savedSubscriptions) {
+      const parsed = JSON.parse(savedSubscriptions);
+      // Convert date strings back to Date objects
+      const subscriptions = parsed.map((sub: any) => ({
+        ...sub,
+        nextBillingDate: new Date(sub.nextBillingDate),
+        lastBillingDate: sub.lastBillingDate ? new Date(sub.lastBillingDate) : undefined,
+        createdAt: new Date(sub.createdAt),
+        updatedAt: new Date(sub.updatedAt),
+      }));
+      setSubscriptions(subscriptions);
+    } else {
+      // Initialize with mock data only if no saved data exists
+      const mockSubscriptions: Subscription[] = [
+        {
+          id: "1",
+          name: "Netflix",
+          category: "entertainment",
+          amount: 15.99,
+          currency: "USD",
+          billingFrequency: "monthly",
+          nextBillingDate: new Date("2025-06-15"),
+          lastBillingDate: new Date("2025-05-15"),
+          description: "Premium streaming plan",
+          website: "https://netflix.com",
+          status: "active",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "2",
+          name: "Spotify Premium",
+          category: "music",
+          amount: 9.99,
+          currency: "USD",
+          billingFrequency: "monthly",
+          nextBillingDate: new Date("2025-06-05"),
+          lastBillingDate: new Date("2025-05-05"),
+          description: "Individual music streaming",
+          website: "https://spotify.com",
+          status: "active",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "3",
+          name: "Adobe Creative Cloud",
+          category: "productivity",
+          amount: 52.99,
+          currency: "USD",
+          billingFrequency: "monthly",
+          nextBillingDate: new Date("2025-06-08"),
+          lastBillingDate: new Date("2025-05-08"),
+          description: "All Creative Cloud apps",
+          website: "https://adobe.com",
+          status: "active",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: "4",
+          name: "GitHub Pro",
+          category: "productivity",
+          amount: 4.00,
+          currency: "USD",
+          billingFrequency: "monthly",
+          nextBillingDate: new Date("2025-06-20"),
+          lastBillingDate: new Date("2025-05-20"),
+          description: "Professional developer account",
+          website: "https://github.com",
+          status: "active",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      setSubscriptions(mockSubscriptions);
+      localStorage.setItem('subscriptionTracker', JSON.stringify(mockSubscriptions));
+    }
+  }, []);
+
+  // Save subscriptions to localStorage whenever subscriptions change
+  useEffect(() => {
+    if (subscriptions.length > 0) {
+      localStorage.setItem('subscriptionTracker', JSON.stringify(subscriptions));
+    }
+  }, [subscriptions]);
+
+  const handleAddSubscription = (data: SubscriptionFormData) => {
+    const newSubscription: Subscription = {
+      id: Date.now().toString(),
+      ...data,
+      nextBillingDate: new Date(data.nextBillingDate),
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    setSubscriptions(prev => [...prev, newSubscription]);
+    setShowForm(false);
+  };
+
+  const handleEditSubscription = (data: SubscriptionFormData) => {
+    if (!editingSubscription) return;
+
+    const updatedSubscription: Subscription = {
+      ...editingSubscription,
+      ...data,
+      nextBillingDate: new Date(data.nextBillingDate),
+      updatedAt: new Date(),
+    };
+
+    setSubscriptions(prev => 
+      prev.map(sub => sub.id === editingSubscription.id ? updatedSubscription : sub)
+    );
+    setEditingSubscription(null);
+  };
+
+  const handleDeleteSubscription = (id: string) => {
+    if (confirm("Are you sure you want to delete this subscription?")) {
+      setSubscriptions(prev => prev.filter(sub => sub.id !== id));
+    }
+  };
+
+  const totalMonthlySpend = subscriptions.reduce((total, sub) => {
+    const monthlyAmount = sub.billingFrequency === "yearly" ? sub.amount / 12 :
+                         sub.billingFrequency === "quarterly" ? sub.amount / 3 :
+                         sub.billingFrequency === "weekly" ? sub.amount * 4 :
+                         sub.amount;
+    return total + monthlyAmount;
+  }, 0);
+
+  const upcomingCharges = subscriptions.filter(sub => {
+    const daysUntilBilling = Math.ceil(
+      (sub.nextBillingDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    );
+    return daysUntilBilling <= 7 && daysUntilBilling >= 0;
+  });
+
+  // Filter subscriptions based on search and filter criteria
+  const filteredSubscriptions = subscriptions.filter(sub => {
+    const matchesSearch = sub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         sub.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = filterCategory === "all" || sub.category === filterCategory;
+    const matchesStatus = filterStatus === "all" || sub.status === filterStatus;
+    
+    return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  // Export functionality
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(subscriptions, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `subscription-tracker-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  if (showForm || editingSubscription) {
+    return (
+      <div className="container mx-auto p-6">
+        <SubscriptionForm
+          onSubmit={editingSubscription ? handleEditSubscription : handleAddSubscription}
+          onCancel={() => {
+            setShowForm(false);
+            setEditingSubscription(null);
+          }}
+          initialData={editingSubscription ? {
+            name: editingSubscription.name,
+            category: editingSubscription.category,
+            amount: editingSubscription.amount,
+            currency: editingSubscription.currency,
+            billingFrequency: editingSubscription.billingFrequency,
+            nextBillingDate: editingSubscription.nextBillingDate.toISOString().split('T')[0],
+            description: editingSubscription.description,
+            website: editingSubscription.website,
+          } : undefined}
+          isEditing={!!editingSubscription}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Subscription Tracker</h1>
+          <p className="text-muted-foreground">
+            Manage and track all your recurring subscriptions
+          </p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button 
+            onClick={handleExportData} 
+            variant="outline" 
+            className="flex-1 sm:flex-none"
+            disabled={subscriptions.length === 0}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+          <Button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Subscription
+          </Button>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search subscriptions..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="entertainment">Entertainment</SelectItem>
+                  <SelectItem value="music">Music</SelectItem>
+                  <SelectItem value="productivity">Productivity</SelectItem>
+                  <SelectItem value="fitness">Fitness</SelectItem>
+                  <SelectItem value="food">Food</SelectItem>
+                  <SelectItem value="education">Education</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {(searchTerm || filterCategory !== "all" || filterStatus !== "all") && (
+            <div className="mt-4 text-sm text-muted-foreground">
+              Showing {filteredSubscriptions.length} of {subscriptions.length} subscriptions
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Upcoming Charges Alert */}
+      {upcomingCharges.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-600" />
+              <div>
+                <h3 className="font-semibold text-orange-800 dark:text-orange-200">
+                  Upcoming Charges
+                </h3>
+                <p className="text-sm text-orange-700 dark:text-orange-300">
+                  You have {upcomingCharges.length} subscription{upcomingCharges.length !== 1 ? 's' : ''} billing in the next 7 days
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Monthly Spend</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${totalMonthlySpend.toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Across {subscriptions.length} subscription{subscriptions.length !== 1 ? 's' : ''}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Upcoming Charges</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{upcomingCharges.length}</div>
+            <p className="text-xs text-muted-foreground">
+              In the next 7 days
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Annual Estimate</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${(totalMonthlySpend * 12).toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Projected yearly spend
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Tabs Navigation */}
+      <Tabs value={activeTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger 
+            value="overview" 
+            isActive={activeTab === "overview"}
+            onClick={() => setActiveTab("overview")}
+          >
+            <Grid3X3 className="h-4 w-4 mr-2" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger 
+            value="calendar" 
+            isActive={activeTab === "calendar"}
+            onClick={() => setActiveTab("calendar")}
+          >
+            <CalendarDays className="h-4 w-4 mr-2" />
+            Calendar
+          </TabsTrigger>
+          <TabsTrigger 
+            value="analytics" 
+            isActive={activeTab === "analytics"}
+            onClick={() => setActiveTab("analytics")}
+          >
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Analytics
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" isActive={activeTab === "overview"}>
+          {subscriptions.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="text-center">
+                  <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No subscriptions yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Start tracking your subscriptions to take control of your spending
+                  </p>
+                  <Button onClick={() => setShowForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Your First Subscription
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : filteredSubscriptions.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="text-center">
+                  <Filter className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No subscriptions found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Try adjusting your search or filter criteria
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setSearchTerm("");
+                      setFilterCategory("all");
+                      setFilterStatus("all");
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredSubscriptions.map((subscription) => (
+                <SubscriptionCard
+                  key={subscription.id}
+                  subscription={subscription}
+                  onEdit={setEditingSubscription}
+                  onDelete={handleDeleteSubscription}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="calendar" isActive={activeTab === "calendar"}>
+          <CalendarView subscriptions={subscriptions} />
+        </TabsContent>
+
+        <TabsContent value="analytics" isActive={activeTab === "analytics"}>
+          <Analytics subscriptions={subscriptions} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
