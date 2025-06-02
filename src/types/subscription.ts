@@ -10,8 +10,60 @@ export interface Subscription {
   description?: string;
   website?: string;
   status: SubscriptionStatus;
+  userId?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  image?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Budget {
+  id: string;
+  name: string;
+  amount: number;
+  period: 'monthly' | 'yearly';
+  category?: SubscriptionCategory;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UserSettings {
+  id: string;
+  userId: string;
+  theme: 'light' | 'dark';
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  budgetAlerts: boolean;
+  duplicateDetection: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  read: boolean;
+  subscriptionId?: string;
+  createdAt: Date;
+}
+
+export interface PriceHistory {
+  id: string;
+  amount: number;
+  previousAmount: number;
+  changeDate: Date;
+  subscriptionId: string;
 }
 
 export type SubscriptionCategory = 

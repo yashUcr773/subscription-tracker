@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  image     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscriptions Subscription[]
+  budgets       Budget[]
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Subscription {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  category         String
+  amount           Float
+  currency         String   @default("USD")
+  billingFrequency String
+  nextBillingDate  DateTime
+  lastBillingDate  DateTime?
+  website          String?
+  status           String   @default("active")
+  userId           String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications    Notification[]
+  priceHistory     PriceHistory[]
+
+  @@map("subscriptions")
+}
+
+model Budget {
+  id          String   @id @default(cuid())
+  name        String
+  amount      Float
+  period      String   // monthly, yearly
+  category    String?  // optional category filter
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("budgets")
+}
+
+model Notification {
+  id             String       @id @default(cuid())
+  type           String
+  title          String
+  message        String
+  priority       String       @default("medium")
+  read           Boolean      @default(false)
+  subscriptionId String?
+  createdAt      DateTime     @default(now())
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model PriceHistory {
+  id             String       @id @default(cuid())
+  amount         Float
+  previousAmount Float
+  changeDate     DateTime     @default(now())
+  subscriptionId String
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("price_history")
+}
+
+model UserSettings {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  theme        String  @default("light")
+  emailNotifications Boolean @default(true)
+  pushNotifications  Boolean @default(true)
+  budgetAlerts       Boolean @default(true)
+  duplicateDetection Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("user_settings")
+}

@@ -1,16 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, DollarSign, Calendar, TrendingUp, Bell, AlertTriangle, Grid3X3, BarChart3, CalendarDays, Search, Filter, Download } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { BulkActions } from "@/components/bulk-actions";
+import { DuplicateDetector } from "@/components/duplicate-detector";
+import { BudgetManager } from "@/components/budget-manager";
+import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useTheme } from "@/components/theme-provider";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Plus, DollarSign, Calendar, TrendingUp, Bell, AlertTriangle, Grid3X3, BarChart3, CalendarDays, Search, Filter, Download,  HelpCircle } from "lucide-react";
 import { SubscriptionCard } from "@/components/subscription-card";
 import { SubscriptionForm } from "@/components/subscription-form";
 import { Analytics } from "@/components/analytics";
 import { CalendarView } from "@/components/calendar-view";
+import { Notifications } from "@/components/notifications";
 import { Subscription, SubscriptionFormData } from "@/types/subscription";
 
 export default function Home() {
@@ -21,6 +31,22 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const { setTheme } = useTheme();
+
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Load subscriptions from localStorage on component mount
   useEffect(() => {
@@ -112,6 +138,49 @@ export default function Home() {
     }
   }, [subscriptions]);
 
+  // Export functionality
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(subscriptions, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `subscription-tracker-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  // Keyboard shortcuts setup
+  useKeyboardShortcuts({
+    onNewSubscription: () => setShowForm(true),
+    onToggleSearch: () => searchInputRef.current?.focus(),
+    onToggleTheme: () => {
+      // Cycle through themes: light -> dark -> system
+      const currentTheme = localStorage.getItem('theme') || 'system';
+      const nextTheme = currentTheme === 'light' ? 'dark' : 
+                       currentTheme === 'dark' ? 'system' : 'light';
+      setTheme(nextTheme);
+    },
+    onSelectAll: () => {
+      if (selectedIds.length === filteredSubscriptions.length) {
+        setSelectedIds([]);
+      } else {
+        setSelectedIds(filteredSubscriptions.map(sub => sub.id));
+      }
+    },
+    onClearSelection: () => setSelectedIds([]),
+    onDeleteSelected: () => handleBulkAction('delete', selectedIds),
+    onExport: handleExportData,
+    onTabChange: setActiveTab,
+    onShowShortcuts: () => setShowKeyboardShortcuts(true),
+    onEscape: () => {
+      setSelectedIds([]);
+      setShowForm(false);
+      setEditingSubscription(null);
+      setShowKeyboardShortcuts(false);
+    },
+  });
+
   const handleAddSubscription = (data: SubscriptionFormData) => {
     const newSubscription: Subscription = {
       id: Date.now().toString(),
@@ -145,7 +214,49 @@ export default function Home() {
   const handleDeleteSubscription = (id: string) => {
     if (confirm("Are you sure you want to delete this subscription?")) {
       setSubscriptions(prev => prev.filter(sub => sub.id !== id));
+      setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
     }
+  };
+
+  // Bulk actions handler
+  const handleBulkAction = (action: string, ids: string[]) => {
+    switch (action) {
+      case 'delete':
+        setSubscriptions(prev => prev.filter(sub => !ids.includes(sub.id)));
+        break;
+      case 'pause':
+        setSubscriptions(prev => prev.map(sub => 
+          ids.includes(sub.id) ? { ...sub, status: 'paused' as const, updatedAt: new Date() } : sub
+        ));
+        break;
+      case 'activate':
+        setSubscriptions(prev => prev.map(sub => 
+          ids.includes(sub.id) ? { ...sub, status: 'active' as const, updatedAt: new Date() } : sub
+        ));
+        break;
+      case 'export':
+        const selectedSubs = subscriptions.filter(sub => ids.includes(sub.id));
+        const dataStr = JSON.stringify(selectedSubs, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        const exportFileDefaultName = `selected-subscriptions-${new Date().toISOString().split('T')[0]}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+        break;
+    }
+    setSelectedIds([]);
+  };
+
+  // Duplicate detection handlers
+  const handleMergeDuplicates = (keepId: string, removeId: string) => {
+    setSubscriptions(prev => prev.filter(sub => sub.id !== removeId));
+    setSelectedIds(prev => prev.filter(id => id !== removeId));
+  };
+
+  const handleDismissDuplicate = (duplicateKey: string) => {
+    console.log("🚀 ~ handleDismissDuplicate ~ duplicateKey:", duplicateKey)
   };
 
   const totalMonthlySpend = subscriptions.reduce((total, sub) => {
@@ -173,18 +284,6 @@ export default function Home() {
     return matchesSearch && matchesCategory && matchesStatus;
   });
 
-  // Export functionality
-  const handleExportData = () => {
-    const dataStr = JSON.stringify(subscriptions, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = `subscription-tracker-${new Date().toISOString().split('T')[0]}.json`;
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-  };
-
   if (showForm || editingSubscription) {
     return (
       <div className="container mx-auto p-6">
@@ -211,16 +310,26 @@ export default function Home() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-4 lg:p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Subscription Tracker</h1>
+          <h1 className="text-2xl lg:text-3xl font-bold">Subscription Tracker</h1>
           <p className="text-muted-foreground">
             Manage and track all your recurring subscriptions
           </p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowKeyboardShortcuts(true)}
+            className="hidden sm:flex"
+          >
+            <HelpCircle className="h-4 w-4 mr-2" />
+            Shortcuts
+          </Button>
+          <ThemeToggle />
           <Button 
             onClick={handleExportData} 
             variant="outline" 
@@ -228,14 +337,21 @@ export default function Home() {
             disabled={subscriptions.length === 0}
           >
             <Download className="h-4 w-4 mr-2" />
-            Export
+            {isMobile ? "Export" : "Export"}
           </Button>
           <Button onClick={() => setShowForm(true)} className="flex-1 sm:flex-none">
             <Plus className="h-4 w-4 mr-2" />
-            Add Subscription
+            {isMobile ? "Add" : "Add Subscription"}
           </Button>
         </div>
       </div>
+
+      {/* Duplicate Detection */}
+      <DuplicateDetector
+        subscriptions={subscriptions}
+        onMerge={handleMergeDuplicates}
+        onDismiss={handleDismissDuplicate}
+      />
 
       {/* Search and Filters */}
       <Card>
@@ -245,6 +361,7 @@ export default function Home() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
+                  ref={searchInputRef}
                   placeholder="Search subscriptions..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -355,36 +472,64 @@ export default function Home() {
         </Card>
       </div>
 
+      {/* Mobile Tab Navigation - Additional tabs */}
+      {isMobile && (
+        <div className="lg:hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="calendar">
+                <CalendarDays className="h-4 w-4 mr-1" />
+                Calendar
+              </TabsTrigger>
+              <TabsTrigger value="analytics">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Analytics
+              </TabsTrigger>
+              <TabsTrigger value="notifications">
+                <Bell className="h-4 w-4 mr-1" />
+                Alerts
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
       {/* Tabs Navigation */}
-      <Tabs value={activeTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger 
-            value="overview" 
-            isActive={activeTab === "overview"}
-            onClick={() => setActiveTab("overview")}
-          >
-            <Grid3X3 className="h-4 w-4 mr-2" />
-            Overview
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
+          <TabsTrigger value="overview">
+            <Grid3X3 className="h-4 w-4 mr-1 lg:mr-2" />
+            {isMobile ? "List" : "Overview"}
           </TabsTrigger>
-          <TabsTrigger 
-            value="calendar" 
-            isActive={activeTab === "calendar"}
-            onClick={() => setActiveTab("calendar")}
-          >
+          <TabsTrigger value="budgets">
+            <DollarSign className="h-4 w-4 mr-1 lg:mr-2" />
+            {isMobile ? "Budget" : "Budgets"}
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="hidden lg:flex">
             <CalendarDays className="h-4 w-4 mr-2" />
             Calendar
           </TabsTrigger>
-          <TabsTrigger 
-            value="analytics" 
-            isActive={activeTab === "analytics"}
-            onClick={() => setActiveTab("analytics")}
-          >
+          <TabsTrigger value="analytics" className="hidden lg:flex">
             <BarChart3 className="h-4 w-4 mr-2" />
             Analytics
           </TabsTrigger>
+          <TabsTrigger value="notifications" className="hidden lg:flex">
+            <Bell className="h-4 w-4 mr-2" />
+            Notifications
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" isActive={activeTab === "overview"}>
+        <TabsContent value="overview">
+          {/* Bulk Actions */}
+          {selectedIds.length > 0 && (
+            <BulkActions
+              selectedIds={selectedIds}
+              subscriptions={filteredSubscriptions}
+              onSelectionChange={setSelectedIds}
+              onBulkAction={handleBulkAction}
+            />
+          )}
+
           {subscriptions.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16">
@@ -424,27 +569,78 @@ export default function Home() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSubscriptions.map((subscription) => (
-                <SubscriptionCard
-                  key={subscription.id}
-                  subscription={subscription}
-                  onEdit={setEditingSubscription}
-                  onDelete={handleDeleteSubscription}
+            <div className="space-y-4">
+              {/* Select All Option */}
+              <div className="flex items-center gap-2 px-1">
+                <Checkbox
+                  checked={selectedIds.length === filteredSubscriptions.length && filteredSubscriptions.length > 0}
+                  onCheckedChange={(checked: boolean) => {
+                    if (checked) {
+                      setSelectedIds(filteredSubscriptions.map(sub => sub.id));
+                    } else {
+                      setSelectedIds([]);
+                    }
+                  }}
                 />
-              ))}
+                <span className="text-sm text-muted-foreground">
+                  Select all ({filteredSubscriptions.length})
+                </span>
+                {selectedIds.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedIds.length} selected
+                  </Badge>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredSubscriptions.map((subscription) => (
+                  <div key={subscription.id} className="relative">
+                    <div className="absolute top-2 left-2 z-10">
+                      <Checkbox
+                        checked={selectedIds.includes(subscription.id)}
+                        onCheckedChange={(checked: boolean) => {
+                          if (checked) {
+                            setSelectedIds(prev => [...prev, subscription.id]);
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => id !== subscription.id));
+                          }
+                        }}
+                      />
+                    </div>
+                    <SubscriptionCard
+                      subscription={subscription}
+                      onEdit={setEditingSubscription}
+                      onDelete={handleDeleteSubscription}
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="calendar" isActive={activeTab === "calendar"}>
+        <TabsContent value="budgets">
+          <BudgetManager subscriptions={subscriptions} />
+        </TabsContent>
+
+        <TabsContent value="calendar">
           <CalendarView subscriptions={subscriptions} />
         </TabsContent>
 
-        <TabsContent value="analytics" isActive={activeTab === "analytics"}>
+        <TabsContent value="analytics">
           <Analytics subscriptions={subscriptions} />
         </TabsContent>
+
+        <TabsContent value="notifications">
+          <Notifications subscriptions={subscriptions} />
+        </TabsContent>
       </Tabs>
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcuts 
+        open={showKeyboardShortcuts}
+        onOpenChange={setShowKeyboardShortcuts}
+      />
     </div>
   );
 }

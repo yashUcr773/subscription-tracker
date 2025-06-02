@@ -17,8 +17,6 @@ import {
   CheckCircle, 
   DollarSign,
   TrendingUp,
-  Calendar,
-  AlertCircle,
   Sliders
 } from "lucide-react";
 import { Subscription } from "@/types/subscription";
@@ -369,7 +367,7 @@ export function Notifications({ subscriptions }: NotificationsProps) {
             <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
             <h3 className="text-lg font-semibold mb-2">All caught up!</h3>
             <p className="text-muted-foreground text-center">
-              No new notifications. We'll alert you about upcoming charges and important updates.
+              No new notifications. We&apos;ll alert you about upcoming charges and important updates.
             </p>
           </CardContent>
         </Card>
