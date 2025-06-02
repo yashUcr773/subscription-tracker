@@ -56,11 +56,26 @@ export default function SignUp() {
       setIsLoading(false);
       return;
     }    try {
-      // For demo purposes, we'll simulate a successful signup
-      // In a real app, this would call your user registration API
-      
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the registration API
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'An error occurred during registration');
+        setIsLoading(false);
+        return;
+      }
       
       setSuccess(true);
 
@@ -69,7 +84,7 @@ export default function SignUp() {
         router.push("/auth/signin");
       }, 2000);
     } catch (error) {
-      console.log("🚀 ~ handleSubmit ~ error:", error)
+      console.error("Registration error:", error);
       setError("An error occurred. Please try again.");
     } finally {
       setIsLoading(false);
