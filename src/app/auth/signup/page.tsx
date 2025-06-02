@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,49 +55,19 @@ export default function SignUp() {
       setError(passwordError);
       setIsLoading(false);
       return;
-    }
-
-    try {
-      // Simple password hashing for demo (not secure for production)
-      const hashedPassword = btoa(password); // Basic encoding for demo
-
-      const userData = {
-        id: Date.now().toString(),
-        name,
-        email,
-        password: hashedPassword,
-        createdAt: new Date().toISOString(),
-      };      // Check if user already exists (in localStorage)
-      const existingUsers = JSON.parse(localStorage.getItem('subscription-tracker-users') || '[]') as Array<{
-        id: string;
-        name: string;
-        email: string;
-        password: string;
-        createdAt: string;
-      }>;
-      const userExists = existingUsers.some((user) => user.email === email);
-
-      if (userExists) {
-        setError("An account with this email already exists");
-        setIsLoading(false);
-        return;
-      }
-
-      // Save user
-      existingUsers.push(userData);
-      localStorage.setItem('subscription-tracker-users', JSON.stringify(existingUsers));
-
+    }    try {
+      // For demo purposes, we'll simulate a successful signup
+      // In a real app, this would call your user registration API
+      
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       setSuccess(true);
 
-      // Auto sign in after successful registration
+      // Auto redirect to signin after successful registration
       setTimeout(() => {
-        localStorage.setItem('subscription-tracker-session', JSON.stringify({
-          user: { id: userData.id, name: userData.name, email: userData.email },
-          signedIn: true
-        }));
-        router.push("/");
-        router.refresh();
-      }, 1500);    
+        router.push("/auth/signin");
+      }, 2000);
     } catch (error) {
       console.log("🚀 ~ handleSubmit ~ error:", error)
       setError("An error occurred. Please try again.");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,47 +17,32 @@ export default function SignIn() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError("");
 
-    try {      // Simple validation for demo purposes
-      // In a real app, this would call your authentication API
-      const users = JSON.parse(localStorage.getItem('subscription-tracker-users') || '[]') as Array<{
-        id: string;
-        name: string;
-        email: string;
-        password: string;
-        createdAt: string;
-      }>;
-      const user = users.find((u) => u.email === email);
+    try {
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
 
-      if (!user) {
-        setError("No account found with this email");
-        setIsLoading(false);
-        return;
+      if (result?.error) {
+        setError("Invalid email or password");
+      } else {
+        // Check if sign in was successful
+        const session = await getSession();
+        if (session) {
+          router.push('/');
+        } else {
+          setError("Sign in failed. Please try again.");
+        }
       }
-
-      // For demo purposes, we'll just check if password is provided
-      // In a real app, you'd verify the password hash
-      if (!password) {
-        setError("Password is required");
-        setIsLoading(false);
-        return;
-      }
-
-      // Set user session in localStorage (demo purposes)
-      localStorage.setItem('subscription-tracker-session', JSON.stringify({
-        user: { id: user.id, name: user.name, email: user.email },
-        signedIn: true
-      }));      router.push("/");
-      router.refresh();
     } catch (error) {
-      console.log("🚀 ~ handleSubmit ~ error:", error)
-      setError("An error occurred. Please try again.");
-    } finally {
+      console.error('Sign in error:', error);
+      setError("An error occurred during sign in");    } finally {
       setIsLoading(false);
     }
   };

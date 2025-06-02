@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, Merge, X, Eye } from "lucide-react";
 import { Subscription } from "@/types/subscription";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { apiClient } from "@/lib/api-client";
 
 interface DuplicateDetectorProps {
   subscriptions: Subscription[];
@@ -102,19 +104,58 @@ const determineDuplicateReason = (sub1: Subscription, sub2: Subscription): strin
 };
 
 export function DuplicateDetector({ subscriptions, onMerge }: DuplicateDetectorProps) {
+  const { data: session } = useSession();
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [dismissedDuplicates, setDismissedDuplicates] = useState<Set<string>>(new Set());
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // Load dismissed duplicates from database
   useEffect(() => {
-    const saved = localStorage.getItem('subscriptionTracker_dismissedDuplicates');
-    if (saved) {
-      setDismissedDuplicates(new Set(JSON.parse(saved)));
-    }
-  }, []);
+    const loadDismissedDuplicates = async () => {
+      if (!session?.user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const settings = await apiClient.getSettings();
+        if (settings?.dismissedDuplicates) {
+          setDismissedDuplicates(new Set(settings.dismissedDuplicates));
+        }
+      } catch (error) {
+        console.error('Error loading dismissed duplicates:', error);
+        // Fallback to localStorage
+        const saved = localStorage.getItem('subscriptionTracker_dismissedDuplicates');
+        if (saved) {
+          setDismissedDuplicates(new Set(JSON.parse(saved)));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDismissedDuplicates();
+  }, [session]);
+
+  // Save dismissed duplicates to database
   useEffect(() => {
-    localStorage.setItem('subscriptionTracker_dismissedDuplicates', JSON.stringify([...dismissedDuplicates]));
-  }, [dismissedDuplicates]);
+    const saveDismissedDuplicates = async () => {
+      if (!session?.user || loading) return;
+
+      try {
+        await apiClient.updateSettings({
+          dismissedDuplicates: [...dismissedDuplicates]
+        });
+      } catch (error) {
+        console.error('Error saving dismissed duplicates:', error);
+        // Fallback to localStorage
+        localStorage.setItem('subscriptionTracker_dismissedDuplicates', JSON.stringify([...dismissedDuplicates]));
+      }
+    };
+
+    saveDismissedDuplicates();
+  }, [dismissedDuplicates, session, loading]);
 
   const detectDuplicates = useCallback(() => {
     const groups: DuplicateGroup[] = [];
@@ -151,10 +192,11 @@ export function DuplicateDetector({ subscriptions, onMerge }: DuplicateDetectorP
     });
 
     setDuplicates(groups);
-  }, [subscriptions, dismissedDuplicates]);
-  useEffect(() => {
-    detectDuplicates();
-  }, [detectDuplicates]);
+  }, [subscriptions, dismissedDuplicates]);  useEffect(() => {
+    if (!loading) {
+      detectDuplicates();
+    }
+  }, [detectDuplicates, loading]);
 
   const handleMerge = (keepId: string, removeId: string) => {
     onMerge(keepId, removeId);

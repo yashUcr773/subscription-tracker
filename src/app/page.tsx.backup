@@ -16,7 +16,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useTheme } from "@/components/theme-provider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, DollarSign, Calendar, TrendingUp, Bell, AlertTriangle, Grid3X3, BarChart3, CalendarDays, Search, Filter, Download, HelpCircle } from "lucide-react";
+import { Plus, DollarSign, Calendar, TrendingUp, Bell, AlertTriangle, Grid3X3, BarChart3, CalendarDays, Search, Filter, Download,  HelpCircle } from "lucide-react";
 import { SubscriptionCard } from "@/components/subscription-card";
 import { SubscriptionForm } from "@/components/subscription-form";
 import { Analytics } from "@/components/analytics";
@@ -72,10 +72,13 @@ export default function Home() {
         // Convert date strings back to Date objects
         const subscriptions = data.map((sub: any) => ({
           ...sub,
-          nextBillingDate: new Date(sub.nextBillingDate),
+          nextBillingDate: new Date(sub.nextBilling || sub.nextBillingDate),
           lastBillingDate: sub.lastBillingDate ? new Date(sub.lastBillingDate) : undefined,
           createdAt: new Date(sub.createdAt),
           updatedAt: new Date(sub.updatedAt),
+          // Map database fields to frontend fields
+          amount: sub.price || sub.amount,
+          billingFrequency: sub.billingCycle || sub.billingFrequency,
         }));
         
         setSubscriptions(subscriptions);
@@ -102,6 +105,13 @@ export default function Home() {
     loadSubscriptions();
   }, [status]);
 
+  // Remove localStorage effect since we're using database
+  // useEffect(() => {
+  //   if (subscriptions.length > 0) {
+  //     localStorage.setItem('subscriptionTracker', JSON.stringify(subscriptions));
+  //   }
+  // }, [subscriptions]);
+
   // Export functionality
   const handleExportData = () => {
     const dataStr = JSON.stringify(subscriptions, null, 2);
@@ -113,15 +123,6 @@ export default function Home() {
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
   };
-
-  // Filter subscriptions based on search and filter criteria
-  const filteredSubscriptions = subscriptions.filter((sub: Subscription) => {
-    const matchesSearch = sub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         sub.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === "all" || sub.category === filterCategory;
-    const matchesStatus = filterStatus === "all" || sub.status === filterStatus;
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
 
   // Keyboard shortcuts setup
   useKeyboardShortcuts({
@@ -138,7 +139,7 @@ export default function Home() {
       if (selectedIds.length === filteredSubscriptions.length) {
         setSelectedIds([]);
       } else {
-        setSelectedIds(filteredSubscriptions.map((sub: Subscription) => sub.id));
+        setSelectedIds(filteredSubscriptions.map(sub => sub.id));
       }
     },
     onClearSelection: () => setSelectedIds([]),
@@ -158,14 +159,14 @@ export default function Home() {
     try {
       const subscriptionData = {
         name: data.name,
-        amount: data.amount,
-        billingFrequency: data.billingFrequency,
-        nextBillingDate: data.nextBillingDate,
+        price: data.amount,
+        billingCycle: data.billingFrequency,
+        nextBilling: data.nextBillingDate,
         category: data.category,
         description: data.description,
-        currency: data.currency,
-        website: data.website,
-        status: 'active'
+        isActive: true,
+        color: '#6366f1',
+        reminder: 3
       };
 
       const newSubscription = await apiClient.createSubscription(subscriptionData);
@@ -173,10 +174,14 @@ export default function Home() {
       // Convert to frontend format
       const formattedSubscription: Subscription = {
         ...newSubscription,
-        nextBillingDate: new Date(newSubscription.nextBillingDate),
-        lastBillingDate: newSubscription.lastBillingDate ? new Date(newSubscription.lastBillingDate) : undefined,
+        amount: newSubscription.price,
+        billingFrequency: newSubscription.billingCycle,
+        nextBillingDate: new Date(newSubscription.nextBilling),
+        status: newSubscription.isActive ? 'active' : 'paused',
         createdAt: new Date(newSubscription.createdAt),
         updatedAt: new Date(newSubscription.updatedAt),
+        currency: data.currency,
+        website: data.website,
       };
 
       setSubscriptions(prev => [...prev, formattedSubscription]);
@@ -193,14 +198,14 @@ export default function Home() {
     try {
       const subscriptionData = {
         name: data.name,
-        amount: data.amount,
-        billingFrequency: data.billingFrequency,
-        nextBillingDate: data.nextBillingDate,
+        price: data.amount,
+        billingCycle: data.billingFrequency,
+        nextBilling: data.nextBillingDate,
         category: data.category,
         description: data.description,
-        currency: data.currency,
-        website: data.website,
-        status: editingSubscription.status
+        isActive: editingSubscription.status === 'active',
+        color: '#6366f1',
+        reminder: 3
       };
 
       const updatedSubscription = await apiClient.updateSubscription(editingSubscription.id, subscriptionData);
@@ -208,10 +213,14 @@ export default function Home() {
       // Convert to frontend format
       const formattedSubscription: Subscription = {
         ...updatedSubscription,
-        nextBillingDate: new Date(updatedSubscription.nextBillingDate),
-        lastBillingDate: updatedSubscription.lastBillingDate ? new Date(updatedSubscription.lastBillingDate) : undefined,
+        amount: updatedSubscription.price,
+        billingFrequency: updatedSubscription.billingCycle,
+        nextBillingDate: new Date(updatedSubscription.nextBilling),
+        status: updatedSubscription.isActive ? 'active' : 'paused',
         createdAt: new Date(updatedSubscription.createdAt),
         updatedAt: new Date(updatedSubscription.updatedAt),
+        currency: data.currency,
+        website: data.website,
       };
 
       setSubscriptions(prev => 
@@ -251,14 +260,14 @@ export default function Home() {
             if (sub) {
               const updateData = {
                 name: sub.name,
-                amount: sub.amount,
-                billingFrequency: sub.billingFrequency,
-                nextBillingDate: sub.nextBillingDate.toISOString(),
+                price: sub.amount,
+                billingCycle: sub.billingFrequency,
+                nextBilling: sub.nextBillingDate.toISOString(),
                 category: sub.category,
                 description: sub.description,
-                currency: sub.currency,
-                website: sub.website,
-                status: 'paused'
+                isActive: false,
+                color: '#6366f1',
+                reminder: 3
               };
               return apiClient.updateSubscription(id, updateData);
             }
@@ -274,14 +283,14 @@ export default function Home() {
             if (sub) {
               const updateData = {
                 name: sub.name,
-                amount: sub.amount,
-                billingFrequency: sub.billingFrequency,
-                nextBillingDate: sub.nextBillingDate.toISOString(),
+                price: sub.amount,
+                billingCycle: sub.billingFrequency,
+                nextBilling: sub.nextBillingDate.toISOString(),
                 category: sub.category,
                 description: sub.description,
-                currency: sub.currency,
-                website: sub.website,
-                status: 'active'
+                isActive: true,
+                color: '#6366f1',
+                reminder: 3
               };
               return apiClient.updateSubscription(id, updateData);
             }
@@ -309,6 +318,9 @@ export default function Home() {
       alert(`Failed to ${action} subscriptions. Please try again.`);
     }
   };
+    }
+    setSelectedIds([]);
+  };
 
   // Duplicate detection handlers
   const handleMergeDuplicates = (keepId: string, removeId: string) => {
@@ -316,7 +328,7 @@ export default function Home() {
     setSelectedIds(prev => prev.filter(id => id !== removeId));
   };
 
-  const totalMonthlySpend = subscriptions.reduce((total: number, sub: Subscription) => {
+  const totalMonthlySpend = subscriptions.reduce((total, sub) => {
     const monthlyAmount = sub.billingFrequency === "yearly" ? sub.amount / 12 :
                          sub.billingFrequency === "quarterly" ? sub.amount / 3 :
                          sub.billingFrequency === "weekly" ? sub.amount * 4 :
@@ -324,11 +336,21 @@ export default function Home() {
     return total + monthlyAmount;
   }, 0);
 
-  const upcomingCharges = subscriptions.filter((sub: Subscription) => {
+  const upcomingCharges = subscriptions.filter(sub => {
     const daysUntilBilling = Math.ceil(
       (sub.nextBillingDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
     );
     return daysUntilBilling <= 7 && daysUntilBilling >= 0;
+  });
+
+  // Filter subscriptions based on search and filter criteria
+  const filteredSubscriptions = subscriptions.filter(sub => {
+    const matchesSearch = sub.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         sub.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = filterCategory === "all" || sub.category === filterCategory;
+    const matchesStatus = filterStatus === "all" || sub.status === filterStatus;
+    
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
   // Show loading state
@@ -395,7 +417,7 @@ export default function Home() {
             Manage and track all your recurring subscriptions
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto">
           <Button 
             variant="outline" 
             size="sm"
@@ -457,9 +479,7 @@ export default function Home() {
                   <SelectItem value="fitness">Fitness</SelectItem>
                   <SelectItem value="food">Food</SelectItem>
                   <SelectItem value="education">Education</SelectItem>
-                  <SelectItem value="news">News</SelectItem>
-                  <SelectItem value="gaming">Gaming</SelectItem>
-                  <SelectItem value="shopping">Shopping</SelectItem>
+                  <SelectItem value="business">Business</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -470,39 +490,56 @@ export default function Home() {
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="paused">Paused</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+          {(searchTerm || filterCategory !== "all" || filterStatus !== "all") && (
+            <div className="mt-4 text-sm text-muted-foreground">
+              Showing {filteredSubscriptions.length} of {subscriptions.length} subscriptions
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Bulk Actions */}
-      {selectedIds.length > 0 && (
-        <BulkActions
-          subscriptions={subscriptions}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-          onBulkAction={handleBulkAction}
-        />
+      {/* Upcoming Charges Alert */}
+      {upcomingCharges.length > 0 && (
+        <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/20">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-600" />
+              <div>
+                <h3 className="font-semibold text-orange-800 dark:text-orange-200">
+                  Upcoming Charges
+                </h3>
+                <p className="text-sm text-orange-700 dark:text-orange-300">
+                  You have {upcomingCharges.length} subscription{upcomingCharges.length !== 1 ? 's' : ''} billing in the next 7 days
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Overview Cards */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Monthly</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Monthly Spend</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalMonthlySpend.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              ${totalMonthlySpend.toFixed(2)}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {subscriptions.length} active subscriptions
+              Across {subscriptions.length} subscription{subscriptions.length !== 1 ? 's' : ''}
             </p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Upcoming Charges</CardTitle>
@@ -511,108 +548,184 @@ export default function Home() {
           <CardContent>
             <div className="text-2xl font-bold">{upcomingCharges.length}</div>
             <p className="text-xs text-muted-foreground">
-              Next 7 days
+              In the next 7 days
             </p>
           </CardContent>
         </Card>
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Annual Total</CardTitle>
+            <CardTitle className="text-sm font-medium">Annual Estimate</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${(totalMonthlySpend * 12).toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              ${(totalMonthlySpend * 12).toFixed(2)}
+            </div>
             <p className="text-xs text-muted-foreground">
-              Estimated yearly cost
+              Projected yearly spend
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Main Content Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      {/* Mobile Tab Navigation - Additional tabs */}
+      {isMobile && (
+        <div className="lg:hidden">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="calendar">
+                <CalendarDays className="h-4 w-4 mr-1" />
+                Calendar
+              </TabsTrigger>
+              <TabsTrigger value="analytics">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Analytics
+              </TabsTrigger>
+              <TabsTrigger value="notifications">
+                <Bell className="h-4 w-4 mr-1" />
+                Alerts
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
+      {/* Tabs Navigation */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5">
-          <TabsTrigger value="overview" className="flex items-center gap-2">
-            <Grid3X3 className="h-4 w-4" />
-            {!isMobile && "Overview"}
+          <TabsTrigger value="overview">
+            <Grid3X3 className="h-4 w-4 mr-1 lg:mr-2" />
+            {isMobile ? "List" : "Overview"}
           </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            {!isMobile && "Analytics"}
+          <TabsTrigger value="budgets">
+            <DollarSign className="h-4 w-4 mr-1 lg:mr-2" />
+            {isMobile ? "Budget" : "Budgets"}
           </TabsTrigger>
-          <TabsTrigger value="calendar" className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4" />
-            {!isMobile && "Calendar"}
+          <TabsTrigger value="calendar" className="hidden lg:flex">
+            <CalendarDays className="h-4 w-4 mr-2" />
+            Calendar
           </TabsTrigger>
-          <TabsTrigger value="budget" className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            {!isMobile && "Budget"}
+          <TabsTrigger value="analytics" className="hidden lg:flex">
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Analytics
           </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2">
-            <Bell className="h-4 w-4" />
-            {!isMobile && "Alerts"}
+          <TabsTrigger value="notifications" className="hidden lg:flex">
+            <Bell className="h-4 w-4 mr-2" />
+            Notifications
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          {filteredSubscriptions.length === 0 ? (
+        <TabsContent value="overview">
+          {/* Bulk Actions */}
+          {selectedIds.length > 0 && (
+            <BulkActions
+              selectedIds={selectedIds}
+              subscriptions={filteredSubscriptions}
+              onSelectionChange={setSelectedIds}
+              onBulkAction={handleBulkAction}
+            />
+          )}
+
+          {subscriptions.length === 0 ? (
             <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-12">
-                  <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No subscriptions found</h3>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="text-center">
+                  <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No subscriptions yet</h3>
                   <p className="text-muted-foreground mb-4">
-                    {subscriptions.length === 0 
-                      ? "Get started by adding your first subscription"
-                      : "Try adjusting your search or filter criteria"
-                    }
+                    Start tracking your subscriptions to take control of your spending
                   </p>
-                  {subscriptions.length === 0 && (
-                    <Button onClick={() => setShowForm(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Your First Subscription
-                    </Button>
-                  )}
+                  <Button onClick={() => setShowForm(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Your First Subscription
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : filteredSubscriptions.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <div className="text-center">
+                  <Filter className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No subscriptions found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Try adjusting your search or filter criteria
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setSearchTerm("");
+                      setFilterCategory("all");
+                      setFilterStatus("all");
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredSubscriptions.map((subscription) => (
-                <div key={subscription.id} className="relative">
-                  <div className="absolute top-2 left-2 z-10">
-                    <Checkbox
-                      checked={selectedIds.includes(subscription.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedIds(prev => [...prev, subscription.id]);
-                        } else {
-                          setSelectedIds(prev => prev.filter(id => id !== subscription.id));
-                        }
-                      }}
+            <div className="space-y-4">
+              {/* Select All Option */}
+              <div className="flex items-center gap-2 px-1">
+                <Checkbox
+                  checked={selectedIds.length === filteredSubscriptions.length && filteredSubscriptions.length > 0}
+                  onCheckedChange={(checked: boolean) => {
+                    if (checked) {
+                      setSelectedIds(filteredSubscriptions.map(sub => sub.id));
+                    } else {
+                      setSelectedIds([]);
+                    }
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">
+                  Select all ({filteredSubscriptions.length})
+                </span>
+                {selectedIds.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedIds.length} selected
+                  </Badge>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredSubscriptions.map((subscription) => (
+                  <div key={subscription.id} className="relative">
+                    <div className="absolute top-2 left-2 z-10">
+                      <Checkbox
+                        checked={selectedIds.includes(subscription.id)}
+                        onCheckedChange={(checked: boolean) => {
+                          if (checked) {
+                            setSelectedIds(prev => [...prev, subscription.id]);
+                          } else {
+                            setSelectedIds(prev => prev.filter(id => id !== subscription.id));
+                          }
+                        }}
+                      />
+                    </div>
+                    <SubscriptionCard
+                      subscription={subscription}
+                      onEdit={setEditingSubscription}
+                      onDelete={handleDeleteSubscription}
                     />
                   </div>
-                  <SubscriptionCard
-                    subscription={subscription}
-                    onEdit={() => setEditingSubscription(subscription)}
-                    onDelete={() => handleDeleteSubscription(subscription.id)}
-                  />
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="analytics">
-          <Analytics subscriptions={subscriptions} />
+        <TabsContent value="budgets">
+          <BudgetManager subscriptions={subscriptions} />
         </TabsContent>
 
         <TabsContent value="calendar">
           <CalendarView subscriptions={subscriptions} />
         </TabsContent>
 
-        <TabsContent value="budget">
-          <BudgetManager subscriptions={subscriptions} />
+        <TabsContent value="analytics">
+          <Analytics subscriptions={subscriptions} />
         </TabsContent>
 
         <TabsContent value="notifications">
@@ -622,8 +735,8 @@ export default function Home() {
 
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcuts 
-        open={showKeyboardShortcuts} 
-        onOpenChange={setShowKeyboardShortcuts} 
+        open={showKeyboardShortcuts}
+        onOpenChange={setShowKeyboardShortcuts}
       />
     </div>
   );

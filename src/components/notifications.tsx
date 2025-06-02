@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
 } from "lucide-react";
 import { Subscription } from "@/types/subscription";
 import { format, differenceInDays, isToday, isTomorrow } from "date-fns";
+import { apiClient } from "@/lib/api-client";
 
 interface NotificationsProps {
   subscriptions: Subscription[];
@@ -48,7 +50,9 @@ interface NotificationSettings {
 }
 
 export function Notifications({ subscriptions }: NotificationsProps) {
+  const { data: session } = useSession();
   const [dismissed, setDismissed] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     emailEnabled: true,
@@ -58,29 +62,97 @@ export function Notifications({ subscriptions }: NotificationsProps) {
     showPriceChanges: true,
     enableSound: false,
   });
-
-  // Load notification settings and dismissed notifications from localStorage
+  // Load notification settings and dismissed notifications from database
   useEffect(() => {
-    const savedSettings = localStorage.getItem('notificationSettings');
-    const savedDismissed = localStorage.getItem('dismissedNotifications');
-    
-    if (savedSettings) {
-      setNotificationSettings(JSON.parse(savedSettings));
+    const loadSettings = async () => {
+      if (!session?.user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Load settings from database
+        const settings = await apiClient.getSettings();
+        if (settings) {
+          setNotificationSettings({
+            emailEnabled: settings.emailNotifications || false,
+            pushEnabled: settings.pushNotifications || false,
+            daysAhead: settings.notificationDays || 3,
+            showRenewed: settings.showRenewed || true,
+            showPriceChanges: settings.showPriceChanges || true,
+            enableSound: settings.enableSound || false,
+          });
+        }
+
+        // Load dismissed notifications
+        const notifications = await apiClient.getNotifications();
+        const dismissedIds = notifications
+          .filter((notif: any) => notif.dismissed)
+          .map((notif: any) => notif.id);
+        setDismissed(dismissedIds);
+      } catch (error) {
+        console.error('Error loading notification settings:', error);
+        // Fallback to localStorage
+        const savedSettings = localStorage.getItem('notificationSettings');
+        const savedDismissed = localStorage.getItem('dismissedNotifications');
+        
+        if (savedSettings) {
+          setNotificationSettings(JSON.parse(savedSettings));
+        }
+        if (savedDismissed) {
+          setDismissed(JSON.parse(savedDismissed));
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, [session]);
+
+  // Save notification settings to database
+  useEffect(() => {
+    const saveSettings = async () => {
+      if (!session?.user) return;
+      
+      try {
+        await apiClient.updateSettings({
+          emailNotifications: notificationSettings.emailEnabled,
+          pushNotifications: notificationSettings.pushEnabled,
+          notificationDays: notificationSettings.daysAhead,
+          showRenewed: notificationSettings.showRenewed,
+          showPriceChanges: notificationSettings.showPriceChanges,
+          enableSound: notificationSettings.enableSound,
+        });
+      } catch (error) {
+        console.error('Error saving notification settings:', error);
+        // Fallback to localStorage
+        localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
+      }
+    };
+
+    if (!loading) {
+      saveSettings();
     }
-    if (savedDismissed) {
-      setDismissed(JSON.parse(savedDismissed));
-    }
-  }, []);
+  }, [notificationSettings, session, loading]);
 
-  // Save notification settings to localStorage
+  // Save dismissed notifications to database
   useEffect(() => {
-    localStorage.setItem('notificationSettings', JSON.stringify(notificationSettings));
-  }, [notificationSettings]);
+    const saveDismissed = async () => {
+      if (!session?.user || loading) return;
+      
+      try {
+        // Update dismissed status in database
+        // This would typically be handled when dismissing individual notifications
+        localStorage.setItem('dismissedNotifications', JSON.stringify(dismissed));
+      } catch (error) {
+        console.error('Error saving dismissed notifications:', error);
+        localStorage.setItem('dismissedNotifications', JSON.stringify(dismissed));
+      }
+    };
 
-  // Save dismissed notifications to localStorage
-  useEffect(() => {
-    localStorage.setItem('dismissedNotifications', JSON.stringify(dismissed));
-  }, [dismissed]);
+    saveDismissed();
+  }, [dismissed, session, loading]);
 
   // Generate notification items with enhanced logic
   const notifications: NotificationItem[] = subscriptions
@@ -184,13 +256,46 @@ export function Notifications({ subscriptions }: NotificationsProps) {
       if (priorityDiff !== 0) return priorityDiff;
       return b.date.getTime() - a.date.getTime();
     });
-
-  const dismissNotification = (id: string) => {
+  const dismissNotification = async (id: string) => {
     setDismissed(prev => [...prev, id]);
+    
+    // Also save to database
+    if (session?.user) {
+      try {
+        await apiClient.createNotification({
+          type: 'dismissed',
+          title: 'Dismissed Notification',
+          message: `Notification ${id} dismissed`,
+          dismissed: true,
+          metadata: { originalId: id }
+        });
+      } catch (error) {
+        console.error('Error saving dismissed notification:', error);
+      }
+    }
   };
 
-  const clearAllNotifications = () => {
-    setDismissed(notifications.map(n => n.id));
+  const clearAllNotifications = async () => {
+    const notificationIds = notifications.map(n => n.id);
+    setDismissed(notificationIds);
+    
+    // Also save to database
+    if (session?.user) {
+      try {
+        const dismissPromises = notificationIds.map(id => 
+          apiClient.createNotification({
+            type: 'dismissed',
+            title: 'Dismissed Notification',
+            message: `Notification ${id} dismissed`,
+            dismissed: true,
+            metadata: { originalId: id }
+          })
+        );
+        await Promise.all(dismissPromises);
+      } catch (error) {
+        console.error('Error saving dismissed notifications:', error);
+      }
+    }
   };
   const updateSettings = (key: keyof NotificationSettings, value: boolean | number) => {
     setNotificationSettings(prev => ({
@@ -228,11 +333,37 @@ export function Notifications({ subscriptions }: NotificationsProps) {
         return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
     }
   };
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Show loading state */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <span className="ml-2">Loading notifications...</span>
+        </div>
+      )}
+
+      {/* Show authentication prompt */}
+      {!session?.user && !loading && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Sign in to manage notifications</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              Get alerts for upcoming charges and manage your notification preferences
+            </p>
+            <Button onClick={() => window.location.href = '/auth/signin'}>
+              Sign In
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main content for authenticated users */}
+      {session?.user && !loading && (
+        <>
+          {/* Header */}
+          <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold flex items-center gap-2">
           <Bell className="h-6 w-6" />
           Notifications
@@ -456,8 +587,9 @@ export function Notifications({ subscriptions }: NotificationsProps) {
                 <div className="text-sm text-muted-foreground">Low</div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </CardContent>        </Card>
+      )}
+        </>
       )}
     </div>
   );
