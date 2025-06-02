@@ -52,9 +52,14 @@ export default function Home() {
   useEffect(() => {
     const savedSubscriptions = localStorage.getItem('subscriptionTracker');
     if (savedSubscriptions) {
-      const parsed = JSON.parse(savedSubscriptions);
+      const parsed = JSON.parse(savedSubscriptions) as (Omit<Subscription, 'nextBillingDate' | 'lastBillingDate' | 'createdAt' | 'updatedAt'> & {
+        nextBillingDate: string;
+        lastBillingDate?: string;
+        createdAt: string;
+        updatedAt: string;
+      })[];
       // Convert date strings back to Date objects
-      const subscriptions = parsed.map((sub: any) => ({
+      const subscriptions = parsed.map((sub) => ({
         ...sub,
         nextBillingDate: new Date(sub.nextBillingDate),
         lastBillingDate: sub.lastBillingDate ? new Date(sub.lastBillingDate) : undefined,
@@ -255,10 +260,6 @@ export default function Home() {
     setSelectedIds(prev => prev.filter(id => id !== removeId));
   };
 
-  const handleDismissDuplicate = (duplicateKey: string) => {
-    console.log("🚀 ~ handleDismissDuplicate ~ duplicateKey:", duplicateKey)
-  };
-
   const totalMonthlySpend = subscriptions.reduce((total, sub) => {
     const monthlyAmount = sub.billingFrequency === "yearly" ? sub.amount / 12 :
                          sub.billingFrequency === "quarterly" ? sub.amount / 3 :
@@ -350,7 +351,6 @@ export default function Home() {
       <DuplicateDetector
         subscriptions={subscriptions}
         onMerge={handleMergeDuplicates}
-        onDismiss={handleDismissDuplicate}
       />
 
       {/* Search and Filters */}

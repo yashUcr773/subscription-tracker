@@ -24,13 +24,15 @@ export function BudgetManager({ subscriptions }: BudgetManagerProps) {
     period: "monthly" as "monthly" | "yearly",
     category: "" as SubscriptionCategory | "",
   });
-
   // Load budgets from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('subscriptionTracker_budgets');
     if (saved) {
-      const parsed = JSON.parse(saved);
-      setBudgets(parsed.map((budget: any) => ({
+      const parsed = JSON.parse(saved) as (Omit<Budget, 'createdAt' | 'updatedAt'> & {
+        createdAt: string;
+        updatedAt: string;
+      })[];
+      setBudgets(parsed.map((budget) => ({
         ...budget,
         createdAt: new Date(budget.createdAt),
         updatedAt: new Date(budget.updatedAt),

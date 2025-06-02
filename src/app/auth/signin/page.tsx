@@ -22,11 +22,16 @@ export default function SignIn() {
     setIsLoading(true);
     setError("");
 
-    try {
-      // Simple validation for demo purposes
+    try {      // Simple validation for demo purposes
       // In a real app, this would call your authentication API
-      const users = JSON.parse(localStorage.getItem('subscription-tracker-users') || '[]');
-      const user = users.find((u: any) => u.email === email);
+      const users = JSON.parse(localStorage.getItem('subscription-tracker-users') || '[]') as Array<{
+        id: string;
+        name: string;
+        email: string;
+        password: string;
+        createdAt: string;
+      }>;
+      const user = users.find((u) => u.email === email);
 
       if (!user) {
         setError("No account found with this email");
@@ -46,9 +51,7 @@ export default function SignIn() {
       localStorage.setItem('subscription-tracker-session', JSON.stringify({
         user: { id: user.id, name: user.name, email: user.email },
         signedIn: true
-      }));
-
-      router.push("/");
+      }));      router.push("/");
       router.refresh();
     } catch (error) {
       console.log("🚀 ~ handleSubmit ~ error:", error)

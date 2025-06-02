@@ -8,7 +8,7 @@ interface TabsProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const Tabs = React.forwardRef<HTMLDivElement, TabsProps>(
-  ({ className, value, onValueChange, children, ...props }, ref) => (
+  ({ className, value: _value, onValueChange: _onValueChange, children, ...props }, ref) => (
     <div
       ref={ref}
       className={cn("w-full", className)}
@@ -41,7 +41,7 @@ interface TabsTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
 }
 
 const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
-  ({ className, value, isActive, children, ...props }, ref) => (
+  ({ className, value: _value, isActive, children, ...props }, ref) => (
     <button
       ref={ref}
       className={cn(
@@ -65,7 +65,7 @@ interface TabsContentProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
-  ({ className, value, isActive, ...props }, ref) => (
+  ({ className, value: _value, isActive, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(

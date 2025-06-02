@@ -66,11 +66,15 @@ export default function SignUp() {
         email,
         password: hashedPassword,
         createdAt: new Date().toISOString(),
-      };
-
-      // Check if user already exists (in localStorage)
-      const existingUsers = JSON.parse(localStorage.getItem('subscription-tracker-users') || '[]');
-      const userExists = existingUsers.some((user: any) => user.email === email);
+      };      // Check if user already exists (in localStorage)
+      const existingUsers = JSON.parse(localStorage.getItem('subscription-tracker-users') || '[]') as Array<{
+        id: string;
+        name: string;
+        email: string;
+        password: string;
+        createdAt: string;
+      }>;
+      const userExists = existingUsers.some((user) => user.email === email);
 
       if (userExists) {
         setError("An account with this email already exists");
@@ -92,8 +96,7 @@ export default function SignUp() {
         }));
         router.push("/");
         router.refresh();
-      }, 1500);
-
+      }, 1500);    
     } catch (error) {
       console.log("🚀 ~ handleSubmit ~ error:", error)
       setError("An error occurred. Please try again.");

@@ -192,8 +192,7 @@ export function Notifications({ subscriptions }: NotificationsProps) {
   const clearAllNotifications = () => {
     setDismissed(notifications.map(n => n.id));
   };
-
-  const updateSettings = (key: keyof NotificationSettings, value: any) => {
+  const updateSettings = (key: keyof NotificationSettings, value: boolean | number) => {
     setNotificationSettings(prev => ({
       ...prev,
       [key]: value

@@ -57,8 +57,7 @@ export function SubscriptionForm({
     e.preventDefault();
     onSubmit(formData);
   };
-
-  const updateField = (field: keyof SubscriptionFormData, value: any) => {
+  const updateField = (field: keyof SubscriptionFormData, value: string | number | SubscriptionCategory | BillingFrequency) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 

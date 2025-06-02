@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 interface DuplicateDetectorProps {
   subscriptions: Subscription[];
   onMerge: (keepId: string, removeId: string) => void;
-  onDismiss: (duplicateKey: string) => void;
 }
 
 interface DuplicateGroup {
@@ -21,7 +20,88 @@ interface DuplicateGroup {
   reason: string;
 }
 
-export function DuplicateDetector({ subscriptions, onMerge, onDismiss }: DuplicateDetectorProps) {
+// Helper functions moved outside component to avoid useCallback dependencies
+const levenshteinDistance = (str1: string, str2: string): number => {
+  const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+
+  for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
+  for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
+
+  for (let j = 1; j <= str2.length; j++) {
+    for (let i = 1; i <= str1.length; i++) {
+      const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1,
+        matrix[j - 1][i] + 1,
+        matrix[j - 1][i - 1] + indicator
+      );
+    }
+  }
+
+  return matrix[str2.length][str1.length];
+};
+
+const extractDomain = (url: string): string => {
+  try {
+    const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
+    return urlObj.hostname.replace('www.', '');
+  } catch {
+    return url.toLowerCase();
+  }
+};
+
+const calculateSimilarity = (sub1: Subscription, sub2: Subscription) => {
+  let score = 0;
+  const reasons = [];
+
+  // Name similarity (Levenshtein distance)
+  const nameSimilarity = 1 - (levenshteinDistance(
+    sub1.name.toLowerCase(), 
+    sub2.name.toLowerCase()
+  ) / Math.max(sub1.name.length, sub2.name.length));
+  
+  if (nameSimilarity > 0.8) {
+    score += 0.4;
+    reasons.push('Similar names');
+  }
+
+  // Exact amount match
+  if (Math.abs(sub1.amount - sub2.amount) < 0.01) {
+    score += 0.3;
+    reasons.push('Same amount');
+  }
+
+  // Same category
+  if (sub1.category === sub2.category) {
+    score += 0.2;
+    reasons.push('Same category');
+  }
+
+  // Same billing frequency
+  if (sub1.billingFrequency === sub2.billingFrequency) {
+    score += 0.1;
+    reasons.push('Same billing frequency');
+  }
+
+  // Website similarity
+  if (sub1.website && sub2.website) {
+    const domain1 = extractDomain(sub1.website);
+    const domain2 = extractDomain(sub2.website);
+    if (domain1 === domain2) {
+      score += 0.3;
+      reasons.push('Same website');
+    }
+  }
+
+  return { score, reasons };
+};
+
+const determineDuplicateReason = (sub1: Subscription, sub2: Subscription): string => {
+  const similarity = calculateSimilarity(sub1, sub2);
+  return similarity.reasons.join(', ');
+};
+
+export function DuplicateDetector({ subscriptions, onMerge }: DuplicateDetectorProps) {
   const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
   const [dismissedDuplicates, setDismissedDuplicates] = useState<Set<string>>(new Set());
   const [selectedGroup, setSelectedGroup] = useState<DuplicateGroup | null>(null);
@@ -32,16 +112,11 @@ export function DuplicateDetector({ subscriptions, onMerge, onDismiss }: Duplica
       setDismissedDuplicates(new Set(JSON.parse(saved)));
     }
   }, []);
-
   useEffect(() => {
     localStorage.setItem('subscriptionTracker_dismissedDuplicates', JSON.stringify([...dismissedDuplicates]));
   }, [dismissedDuplicates]);
 
-  useEffect(() => {
-    detectDuplicates();
-  }, [subscriptions, dismissedDuplicates]);
-
-  const detectDuplicates = () => {
+  const detectDuplicates = useCallback(() => {
     const groups: DuplicateGroup[] = [];
     const processed = new Set<string>();
 
@@ -76,87 +151,10 @@ export function DuplicateDetector({ subscriptions, onMerge, onDismiss }: Duplica
     });
 
     setDuplicates(groups);
-  };
-
-  const calculateSimilarity = (sub1: Subscription, sub2: Subscription) => {
-    let score = 0;
-    const reasons = [];
-
-    // Name similarity (Levenshtein distance)
-    const nameSimilarity = 1 - (levenshteinDistance(
-      sub1.name.toLowerCase(), 
-      sub2.name.toLowerCase()
-    ) / Math.max(sub1.name.length, sub2.name.length));
-    
-    if (nameSimilarity > 0.8) {
-      score += 0.4;
-      reasons.push('Similar names');
-    }
-
-    // Exact amount match
-    if (Math.abs(sub1.amount - sub2.amount) < 0.01) {
-      score += 0.3;
-      reasons.push('Same amount');
-    }
-
-    // Same category
-    if (sub1.category === sub2.category) {
-      score += 0.2;
-      reasons.push('Same category');
-    }
-
-    // Same billing frequency
-    if (sub1.billingFrequency === sub2.billingFrequency) {
-      score += 0.1;
-      reasons.push('Same billing frequency');
-    }
-
-    // Website similarity
-    if (sub1.website && sub2.website) {
-      const domain1 = extractDomain(sub1.website);
-      const domain2 = extractDomain(sub2.website);
-      if (domain1 === domain2) {
-        score += 0.3;
-        reasons.push('Same website');
-      }
-    }
-
-    return { score, reasons };
-  };
-
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
-
-    for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
-
-    for (let j = 1; j <= str2.length; j++) {
-      for (let i = 1; i <= str1.length; i++) {
-        const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1,
-          matrix[j - 1][i] + 1,
-          matrix[j - 1][i - 1] + indicator
-        );
-      }
-    }
-
-    return matrix[str2.length][str1.length];
-  };
-
-  const extractDomain = (url: string): string => {
-    try {
-      const urlObj = new URL(url.startsWith('http') ? url : `https://${url}`);
-      return urlObj.hostname.replace('www.', '');
-    } catch {
-      return url.toLowerCase();
-    }
-  };
-
-  const determineDuplicateReason = (sub1: Subscription, sub2: Subscription): string => {
-    const similarity = calculateSimilarity(sub1, sub2);
-    return similarity.reasons.join(', ');
-  };
+  }, [subscriptions, dismissedDuplicates]);
+  useEffect(() => {
+    detectDuplicates();
+  }, [detectDuplicates]);
 
   const handleMerge = (keepId: string, removeId: string) => {
     onMerge(keepId, removeId);
@@ -168,7 +166,6 @@ export function DuplicateDetector({ subscriptions, onMerge, onDismiss }: Duplica
 
   const handleDismiss = (group: DuplicateGroup) => {
     setDismissedDuplicates(prev => new Set([...prev, group.key]));
-    onDismiss(group.key);
   };
 
   if (duplicates.length === 0) {

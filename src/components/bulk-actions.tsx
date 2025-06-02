@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronDown, Trash2, Pause, Play, Archive, Download, Check } from "lucide-react";
+import { ChevronDown, Trash2, Pause, Play,  Download, Check } from "lucide-react";
 import { Subscription } from "@/types/subscription";
 
 interface BulkActionsProps {
